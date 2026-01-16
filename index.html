@@ -16,15 +16,40 @@ html, body {
   font-family: Arial, sans-serif;
 }
 
-#container { display: flex; height: 100%; }
+#container {
+  display: flex;
+  height: 100%;
+}
+
 #sidebar {
   width: 300px;
   background: #0f1a2b;
-  padding: 15px;
+  padding: 12px;
   box-sizing: border-box;
   overflow-y: auto;
+  transition: transform 0.3s ease;
 }
-#map { flex: 1; }
+
+#sidebar.hidden {
+  transform: translateX(-100%);
+}
+
+#map {
+  flex: 1;
+}
+
+#toggleSidebar {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  background: #1b2a44;
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
 
 h2 { margin-top: 0; }
 
@@ -39,13 +64,29 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
   font-size:13px;
   cursor:pointer;
 }
+
 .violation:hover { background:#24365c; }
 
 .small { font-size:12px; color:#9fb4d9; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  #sidebar {
+    position: absolute;
+    height: 100%;
+    z-index: 999;
+  }
+  #toggleSidebar {
+    display: block;
+  }
+}
 </style>
 </head>
 
 <body>
+
+<div id="toggleSidebar" onclick="toggleSidebar()">☰</div>
+
 <div id="container">
   <div id="sidebar">
     <h2>AIRSMET</h2>
@@ -65,6 +106,11 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
     </div>
 
     <div class="section">
+      <strong>Alerts</strong>
+      <label><input type="checkbox" id="soundToggle" checked> Audible Alert</label>
+    </div>
+
+    <div class="section">
       <strong>Restricted Airspace Activity</strong>
       <div id="violationList" class="small">No active violations</div>
     </div>
@@ -72,13 +118,17 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
     <div class="section small">
       Region: CA (SLO → NV → MX)<br>
       Aircraft: OpenSky (Live)<br>
-      TFRs: FAA GeoJSON<br>
+      Classification: Estimated<br>
       Advisory: Informational
     </div>
   </div>
 
   <div id="map"></div>
 </div>
+
+<audio id="alertSound">
+  <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+</audio>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -133,6 +183,20 @@ fetch("https://tfr.faa.gov/tfrapi/geojson")
   }).addTo(tfrLayer);
 });
 
+// ===== HELPERS =====
+function classifyAircraft(speedKmh, altitudeM){
+  if(speedKmh && speedKmh < 150 && altitudeM && altitudeM < 3000){
+    return "Helicopter (est.)";
+  }
+  return "Fixed-wing (est.)";
+}
+
+function playAlert(){
+  if(document.getElementById("soundToggle").checked){
+    document.getElementById("alertSound").play();
+  }
+}
+
 // ===== AIRCRAFT =====
 async function loadAircraft(){
   aircraftLayer.clearLayers();
@@ -158,26 +222,27 @@ async function loadAircraft(){
       }
     });
 
+    const speedKmh = vel ? vel*3.6 : null;
+    const type = classifyAircraft(speedKmh, alt);
     const color=violatedZone?"#ff3333":"#00e5ff";
 
-    // Trail
     L.polyline(aircraftState[icao].history,{color,weight:2,opacity:0.6})
       .addTo(aircraftLayer);
 
-    // Marker
-    const m=L.circleMarker([lat,lon],{radius:5,color})
+    L.circleMarker([lat,lon],{radius:5,color})
       .addTo(aircraftLayer)
       .bindPopup(`
-        <strong>Aircraft</strong><br>
+        <strong>${type}</strong><br>
         ICAO: ${icao}<br>
         Callsign: ${callsign}<br>
         Altitude: ${alt?Math.round(alt)+" m":"N/A"}<br>
-        Speed: ${vel?Math.round(vel*3.6)+" km/h":"N/A"}<br>
+        Speed: ${speedKmh?Math.round(speedKmh)+" km/h":"N/A"}<br>
         Heading: ${hdg?Math.round(hdg)+"°":"N/A"}
       `);
 
     if(violatedZone && !violations[icao]){
-      violations[icao]={icao,callsign,zone:violatedZone,lat,lon};
+      violations[icao]={icao,callsign,zone:violatedZone,lat,lon,type};
+      playAlert();
       updateViolationList();
     }
   });
@@ -189,7 +254,7 @@ function updateViolationList(){
   Object.values(violations).forEach(v=>{
     const d=document.createElement("div");
     d.className="violation";
-    d.innerHTML=`<strong>${v.callsign}</strong><br>${v.icao}<br>Zone: ${v.zone}`;
+    d.innerHTML=`<strong>${v.callsign}</strong><br>${v.type}<br>Zone: ${v.zone}`;
     d.onclick=()=>map.setView([v.lat,v.lon],12);
     box.appendChild(d);
   });
@@ -201,6 +266,10 @@ setInterval(loadAircraft,10000);
 
 function toggleLayer(layer){
   map.hasLayer(layer)?map.removeLayer(layer):map.addLayer(layer);
+}
+
+function toggleSidebar(){
+  document.getElementById("sidebar").classList.toggle("hidden");
 }
 </script>
 </body>
