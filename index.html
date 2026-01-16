@@ -8,99 +8,146 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html, body {
-  margin: 0;
-  height: 100%;
-  background: #0b1320;
-  color: #e6eefc;
-  font-family: Arial, sans-serif;
-}
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0b1320;
+    color: #e6eefc;
+    font-family: Arial, sans-serif;
+  }
 
-#container {
-  display: flex;
-  height: 100%;
-}
-
-#sidebar {
-  width: 300px;
-  background: #0f1a2b;
-  padding: 12px;
-  box-sizing: border-box;
-  overflow-y: auto;
-  transition: transform 0.3s ease;
-}
-
-#sidebar.hidden {
-  transform: translateX(-100%);
-}
-
-#map {
-  flex: 1;
-}
-
-#toggleSidebar {
-  display: none;
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 1000;
-  background: #1b2a44;
-  color: #fff;
-  padding: 8px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-h2 { margin-top: 0; }
-
-.section { margin-bottom: 14px; }
-label { display: block; margin-bottom: 6px; font-size: 14px; }
-
-.violation {
-  background:#1b2a44;
-  border-left:4px solid #ff4444;
-  padding:6px;
-  margin-bottom:6px;
-  font-size:13px;
-  cursor:pointer;
-}
-
-.violation:hover { background:#24365c; }
-
-.small { font-size:12px; color:#9fb4d9; }
-
-/* Aircraft icon */
-.aircraft-icon {
-  pointer-events: none;
-}
-
-/* Mobile */
-@media (max-width: 768px) {
-  #container { position: relative; }
+  #container {
+    display: flex;
+    height: 100%;
+  }
 
   #sidebar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    z-index: 999;
-    transform: translateX(-100%);
+    width: 320px;
+    background: #0f1a2b;
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    transition: transform 0.25s ease;
+    border-right: 1px solid rgba(255,255,255,0.08);
   }
 
-  #sidebar:not(.hidden) {
-    transform: translateX(0);
+  #map {
+    flex: 1;
   }
 
-  #map { width: 100%; }
+  /* Top-right toggle: always above Leaflet controls */
+  #toggleSidebar {
+    display: none;
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 4000;
+    background: rgba(27, 42, 68, 0.95);
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    font-size: 14px;
+    letter-spacing: 0.2px;
+  }
 
-  #toggleSidebar { display: block; }
-}
+  /* Backdrop for mobile drawer */
+  #backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 3000;
+  }
+
+  h2 { margin: 0 0 10px; }
+
+  .section { margin-bottom: 14px; }
+  label { display: block; margin-bottom: 6px; font-size: 14px; }
+
+  .violation {
+    background:#1b2a44;
+    border-left:4px solid #ff4444;
+    padding:8px;
+    margin-bottom:8px;
+    font-size:13px;
+    cursor:pointer;
+    border-radius: 8px;
+  }
+  .violation:hover { background:#24365c; }
+
+  .small { font-size:12px; color:#9fb4d9; }
+
+  /* Feed status */
+  .status {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.3;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #cfe0ff;
+  }
+  .status.bad {
+    border-color: rgba(255,68,68,0.5);
+    background: rgba(255,68,68,0.12);
+    color: #ffd6d6;
+  }
+  .status.good {
+    border-color: rgba(0,229,255,0.35);
+    background: rgba(0,229,255,0.10);
+    color: #d7fbff;
+  }
+
+  /* Aircraft icon */
+  .aircraft-icon { pointer-events: none; }
+
+  /* Mobile drawer behavior */
+  @media (max-width: 768px) {
+    #container { position: relative; }
+
+    #toggleSidebar { display: block; }
+
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      z-index: 3500;
+      transform: translateX(-105%);
+      width: 82vw;
+      max-width: 360px;
+      min-width: 280px;
+    }
+
+    #sidebar.open {
+      transform: translateX(0);
+    }
+
+    #backdrop.show { display: block; }
+
+    #map { width: 100%; }
+  }
+
+  /* Desktop: sidebar always visible */
+  @media (min-width: 769px) {
+    #sidebar { transform: none !important; }
+    #toggleSidebar { display: none !important; }
+    #backdrop { display: none !important; }
+  }
+
+  /* Optional: make Leaflet controls a bit lower so toggle never clashes */
+  .leaflet-top.leaflet-left { top: 52px; }
 </style>
 </head>
 
 <body>
 
-<div id="toggleSidebar" onclick="toggleSidebar()">☰</div>
+<div id="toggleSidebar" onclick="toggleSidebar()">☰ Layers</div>
+<div id="backdrop" onclick="closeSidebar()"></div>
 
 <div id="container">
   <div id="sidebar">
@@ -130,11 +177,32 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
       <div id="violationList" class="small">No active violations</div>
     </div>
 
+    <div class="section">
+      <strong>Feed Status</strong>
+      <div id="feedStatus" class="status">Initializing…</div>
+      <div class="small" style="margin-top:6px;">
+        Tip: If aircraft don’t appear on GitHub Pages, deploy the Cloudflare Worker proxy below.
+      </div>
+    </div>
+
     <div class="section small">
       Region: CA (SLO → NV → MX)<br>
-      Aircraft: OpenSky (Live)<br>
+      Aircraft: OpenSky (Live via proxy)<br>
       Classification: Estimated<br>
       Advisory: Informational
+    </div>
+
+    <div class="section" style="margin-top:18px;">
+      <button onclick="closeSidebar()" style="
+        display:none;
+        width:100%;
+        padding:10px 12px;
+        border-radius:10px;
+        border:1px solid rgba(255,255,255,0.12);
+        background:rgba(255,255,255,0.06);
+        color:#e6eefc;
+        cursor:pointer;
+      " id="closeBtn">Close</button>
     </div>
   </div>
 
@@ -148,182 +216,271 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// ===== MAP =====
-const map = L.map("map").setView([34.1, -118.8], 7);
+  // ========================
+  // CONFIG (IMPORTANT)
+  // ========================
+  // 1) Direct OpenSky will usually fail on GitHub Pages (CORS).
+  // 2) Set this to your Cloudflare Worker URL after you deploy it (see Worker code below).
+  // Example:
+  // const AIRCRAFT_PROXY_BASE = "https://airsmet-proxy.YOURSUBDOMAIN.workers.dev";
+  const AIRCRAFT_PROXY_BASE = ""; // <-- set after Worker deploy
 
-// Hide sidebar by default on mobile
-if (window.innerWidth <= 768) {
-  document.getElementById("sidebar").classList.add("hidden");
-}
+  const OPENSKY_BBOX = "lamin=32&lamax=35.7&lomin=-121.5&lomax=-114";
 
-// ===== BASEMAPS =====
-const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-const baseDark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
-const baseSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
+  // ========================
+  // MAP
+  // ========================
+  const map = L.map("map").setView([34.1, -118.8], 7);
 
-function setBase(type){
-  [baseStandard, baseDark, baseSat].forEach(b => map.removeLayer(b));
-  if(type==="standard") baseStandard.addTo(map);
-  if(type==="dark") baseDark.addTo(map);
-  if(type==="sat") baseSat.addTo(map);
-}
+  // ===== BASEMAPS =====
+  const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+  const baseDark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
+  const baseSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
 
-// ===== LAYERS =====
-const aircraftLayer = L.layerGroup().addTo(map);
-const tfrLayer = L.layerGroup().addTo(map);
-const advisoryLayer = L.layerGroup().addTo(map);
-
-// ===== STATE =====
-const aircraftState = {};
-const violations = {};
-
-// ===== ADVISORY ZONES =====
-const advisoryZones = [
-  { name:"Disneyland", lat:33.8121, lon:-117.9190, radius:5560 },
-  { name:"Dodger Stadium", lat:34.0739, lon:-118.2400, radius:5560 },
-  { name:"SoFi Stadium", lat:33.9535, lon:-118.3390, radius:5560 }
-];
-
-advisoryZones.forEach(z => {
-  L.circle([z.lat,z.lon],{
-    radius:z.radius,
-    color:"#ff9800",
-    dashArray:"6,6",
-    fillOpacity:0.1
-  }).bindPopup(`<strong>${z.name}</strong><br>Advisory – NOTAM pending`)
-    .addTo(advisoryLayer);
-});
-
-// ===== FAA TFRs =====
-fetch("https://tfr.faa.gov/tfrapi/geojson")
-.then(r=>r.json())
-.then(data=>{
-  L.geoJSON(data,{
-    style:{color:"#ff4444",weight:2,fillOpacity:0.15},
-    onEachFeature:(f,l)=>l.bindPopup("FAA Temporary Flight Restriction")
-  }).addTo(tfrLayer);
-});
-
-// ===== HELPERS =====
-function classifyAircraft(speedKmh, altitudeM){
-  if(speedKmh && speedKmh < 150 && altitudeM && altitudeM < 3000){
-    return "Helicopter (est.)";
+  function setBase(type){
+    [baseStandard, baseDark, baseSat].forEach(b => map.removeLayer(b));
+    if(type==="standard") baseStandard.addTo(map);
+    if(type==="dark") baseDark.addTo(map);
+    if(type==="sat") baseSat.addTo(map);
   }
-  return "Fixed-wing (est.)";
-}
 
-function playAlert(){
-  if(document.getElementById("soundToggle").checked){
-    document.getElementById("alertSound").play();
-  }
-}
+  // ===== LAYERS =====
+  const aircraftLayer = L.layerGroup().addTo(map);
+  const tfrLayer = L.layerGroup().addTo(map);
+  const advisoryLayer = L.layerGroup().addTo(map);
 
-function aircraftIcon(type, heading, altitude, color){
-  const symbol = type.includes("Helicopter") ? "🚁" : "✈️";
-  const altFt = altitude ? Math.round(altitude * 3.28084) : null;
+  // ===== STATE =====
+  const aircraftState = {};
+  const violations = {};
 
-  return L.divIcon({
-    className: "aircraft-icon",
-    html: `
-      <div style="
-        transform: rotate(${heading || 0}deg);
-        color:${color};
-        font-size:18px;
-        text-align:center;
-        line-height:1;
-      ">
-        ${symbol}
-        ${altFt ? `<div style="font-size:10px;color:#fff">${altFt} ft</div>` : ""}
-      </div>
-    `,
-    iconSize:[30,30],
-    iconAnchor:[15,15]
+  // ===== ADVISORY ZONES =====
+  const advisoryZones = [
+    { name:"Disneyland", lat:33.8121, lon:-117.9190, radius:5560 },
+    { name:"Dodger Stadium", lat:34.0739, lon:-118.2400, radius:5560 },
+    { name:"SoFi Stadium", lat:33.9535, lon:-118.3390, radius:5560 }
+  ];
+
+  advisoryZones.forEach(z => {
+    L.circle([z.lat,z.lon],{
+      radius:z.radius,
+      color:"#ff9800",
+      dashArray:"6,6",
+      fillOpacity:0.1
+    }).bindPopup(`<strong>${z.name}</strong><br>Advisory – NOTAM pending`)
+      .addTo(advisoryLayer);
   });
-}
 
-// ===== AIRCRAFT =====
-async function loadAircraft(){
-  aircraftLayer.clearLayers();
+  // ===== FAA TFRs =====
+  fetch("https://tfr.faa.gov/tfrapi/geojson")
+    .then(r=>r.json())
+    .then(data=>{
+      L.geoJSON(data,{
+        style:{color:"#ff4444",weight:2,fillOpacity:0.15},
+        onEachFeature:(f,l)=>l.bindPopup("FAA Temporary Flight Restriction")
+      }).addTo(tfrLayer);
+    })
+    .catch(()=>{/* ignore */});
 
-  const res = await fetch(
-    "https://opensky-network.org/api/states/all?lamin=32&lamax=35.7&lomin=-121.5&lomax=-114"
-  );
-  const data = await res.json();
-  if(!data.states) return;
+  // ===== HELPERS =====
+  function classifyAircraft(speedKmh, altitudeM){
+    if(speedKmh && speedKmh < 150 && altitudeM && altitudeM < 3000){
+      return "Helicopter (est.)";
+    }
+    return "Fixed-wing (est.)";
+  }
 
-  data.states.forEach(s=>{
-    const icao=s[0], callsign=s[1]?.trim()||"N/A";
-    const lon=s[5], lat=s[6], alt=s[7], vel=s[9], hdg=s[10];
-    if(!lat||!lon) return;
+  function playAlert(){
+    if(document.getElementById("soundToggle").checked){
+      const a = document.getElementById("alertSound");
+      a.currentTime = 0;
+      a.play().catch(()=>{});
+    }
+  }
 
-    if(!aircraftState[icao]) aircraftState[icao]={ history:[] };
-    aircraftState[icao].history.push([lat,lon]);
-    if(aircraftState[icao].history.length>6) aircraftState[icao].history.shift();
+  function setStatus(text, good=false, bad=false){
+    const el = document.getElementById("feedStatus");
+    el.textContent = text;
+    el.classList.remove("good","bad");
+    if(good) el.classList.add("good");
+    if(bad) el.classList.add("bad");
+  }
 
-    let violatedZone=null;
-    advisoryZones.forEach(z=>{
-      if(map.distance([lat,lon],[z.lat,z.lon])<z.radius){
-        violatedZone=z.name;
+  function aircraftIcon(type, heading, altitude, color){
+    const symbol = type.includes("Helicopter") ? "🚁" : "✈️";
+    const altFt = altitude ? Math.round(altitude * 3.28084) : null;
+
+    return L.divIcon({
+      className: "aircraft-icon",
+      html: `
+        <div style="
+          transform: rotate(${heading || 0}deg);
+          color:${color};
+          font-size:18px;
+          text-align:center;
+          line-height:1;
+          filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+        ">
+          ${symbol}
+          ${altFt ? `<div style="font-size:10px;color:#fff;transform: rotate(${- (heading || 0)}deg);">${altFt} ft</div>` : ""}
+        </div>
+      `,
+      iconSize:[34,34],
+      iconAnchor:[17,17]
+    });
+  }
+
+  // ========================
+  // AIRCRAFT FETCH (proxy-aware)
+  // ========================
+  function buildAircraftUrl(){
+    if (AIRCRAFT_PROXY_BASE) {
+      return `${AIRCRAFT_PROXY_BASE.replace(/\/$/,"")}/opensky?${OPENSKY_BBOX}`;
+    }
+    // Direct OpenSky (will often fail on GH Pages due to CORS)
+    return `https://opensky-network.org/api/states/all?${OPENSKY_BBOX}`;
+  }
+
+  async function loadAircraft(){
+    aircraftLayer.clearLayers();
+
+    const url = buildAircraftUrl();
+    let data;
+
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch (e) {
+      setStatus("Aircraft feed blocked (CORS) or unavailable. Deploy the Cloudflare Worker proxy.", false, true);
+      return;
+    }
+
+    if(!data || !data.states) {
+      setStatus("Aircraft feed returned no states.", false, true);
+      return;
+    }
+
+    setStatus(`Aircraft feed OK • ${data.states.length} tracks`, true, false);
+
+    data.states.forEach(s=>{
+      const icao=s[0], callsign=s[1]?.trim()||"N/A";
+      const lon=s[5], lat=s[6], alt=s[7], vel=s[9], hdg=s[10];
+      if(!lat || !lon) return;
+
+      if(!aircraftState[icao]) aircraftState[icao]={ history:[] };
+      aircraftState[icao].history.push([lat,lon]);
+      if(aircraftState[icao].history.length>6) aircraftState[icao].history.shift();
+
+      let violatedZone=null;
+      advisoryZones.forEach(z=>{
+        if(map.distance([lat,lon],[z.lat,z.lon])<z.radius){
+          violatedZone=z.name;
+        }
+      });
+
+      const speedKmh = vel ? vel*3.6 : null;
+      const type = classifyAircraft(speedKmh, alt);
+      const color = violatedZone ? "#ff3333" : "#00e5ff";
+
+      // trail
+      L.polyline(aircraftState[icao].history,{color,weight:2,opacity:0.6})
+        .addTo(aircraftLayer);
+
+      // icon marker
+      L.marker([lat,lon],{
+        icon: aircraftIcon(type, hdg, alt, color)
+      })
+      .addTo(aircraftLayer)
+      .bindPopup(`
+        <strong>${type}</strong><br>
+        ICAO: ${icao}<br>
+        Callsign: ${callsign}<br>
+        Altitude: ${alt ? Math.round(alt*3.28084)+" ft" : "N/A"}<br>
+        Speed: ${speedKmh ? Math.round(speedKmh)+" km/h" : "N/A"}<br>
+        Heading: ${hdg ? Math.round(hdg)+"°" : "N/A"}
+      `);
+
+      if(violatedZone && !violations[icao]){
+        violations[icao]={icao,callsign,zone:violatedZone,lat,lon,type};
+        playAlert();
+        updateViolationList();
       }
     });
+  }
 
-    const speedKmh = vel ? vel*3.6 : null;
-    const type = classifyAircraft(speedKmh, alt);
-    const color = violatedZone ? "#ff3333" : "#00e5ff";
+  function updateViolationList(){
+    const box=document.getElementById("violationList");
+    box.innerHTML="";
+    Object.values(violations).forEach(v=>{
+      const d=document.createElement("div");
+      d.className="violation";
+      d.innerHTML=`<strong>${v.callsign}</strong><br>${v.type}<br>Zone: ${v.zone}`;
+      d.onclick=()=>{
+        closeSidebar();
+        map.setView([v.lat,v.lon],12);
+      };
+      box.appendChild(d);
+    });
+    if(!box.innerHTML) box.innerHTML="No active violations";
+  }
 
-    L.polyline(aircraftState[icao].history,{color,weight:2,opacity:0.6})
-      .addTo(aircraftLayer);
+  // ===== Layer toggles =====
+  function toggleLayer(layer){
+    map.hasLayer(layer)?map.removeLayer(layer):map.addLayer(layer);
+  }
 
-    L.marker([lat,lon],{
-      icon: aircraftIcon(type, hdg, alt, color)
-    })
-    .addTo(aircraftLayer)
-    .bindPopup(`
-      <strong>${type}</strong><br>
-      ICAO: ${icao}<br>
-      Callsign: ${callsign}<br>
-      Altitude: ${alt ? Math.round(alt*3.28084)+" ft" : "N/A"}<br>
-      Speed: ${speedKmh ? Math.round(speedKmh)+" km/h" : "N/A"}<br>
-      Heading: ${hdg ? Math.round(hdg)+"°" : "N/A"}
-    `);
+  // ========================
+  // MOBILE SIDEBAR (reliable)
+  // ========================
+  function isMobile(){ return window.innerWidth <= 768; }
 
-    if(violatedZone && !violations[icao]){
-      violations[icao]={icao,callsign,zone:violatedZone,lat,lon,type};
-      playAlert();
-      updateViolationList();
+  function openSidebar(){
+    if(!isMobile()) return;
+    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("backdrop").classList.add("show");
+    document.getElementById("closeBtn").style.display = "block";
+  }
+
+  function closeSidebar(){
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("backdrop").classList.remove("show");
+    document.getElementById("closeBtn").style.display = isMobile() ? "block" : "none";
+  }
+
+  function toggleSidebar(){
+    if(!isMobile()) return;
+    const sb = document.getElementById("sidebar");
+    if(sb.classList.contains("open")) closeSidebar();
+    else openSidebar();
+  }
+
+  // Close drawer when tapping map (mobile)
+  map.on("click", () => {
+    if(isMobile()) closeSidebar();
+  });
+
+  // Handle resize (mobile<->desktop)
+  window.addEventListener("resize", () => {
+    if(!isMobile()){
+      // desktop: show sidebar, no backdrop
+      document.getElementById("sidebar").classList.remove("open");
+      document.getElementById("backdrop").classList.remove("show");
+      document.getElementById("closeBtn").style.display = "none";
+    } else {
+      // mobile: keep closed by default, but ensure close button exists when opened
+      document.getElementById("closeBtn").style.display = document.getElementById("sidebar").classList.contains("open") ? "block" : "none";
     }
   });
-}
 
-function updateViolationList(){
-  const box=document.getElementById("violationList");
-  box.innerHTML="";
-  Object.values(violations).forEach(v=>{
-    const d=document.createElement("div");
-    d.className="violation";
-    d.innerHTML=`<strong>${v.callsign}</strong><br>${v.type}<br>Zone: ${v.zone}`;
-    d.onclick=()=>map.setView([v.lat,v.lon],12);
-    box.appendChild(d);
-  });
-  if(!box.innerHTML) box.innerHTML="No active violations";
-}
-
-loadAircraft();
-setInterval(loadAircraft,10000);
-
-function toggleLayer(layer){
-  map.hasLayer(layer)?map.removeLayer(layer):map.addLayer(layer);
-}
-
-function toggleSidebar(){
-  document.getElementById("sidebar").classList.toggle("hidden");
-}
-
-map.on("click",()=>{
-  if(window.innerWidth<=768){
-    document.getElementById("sidebar").classList.add("hidden");
+  // On first load: mobile starts closed (map-first), but toggle always visible
+  if (isMobile()) {
+    closeSidebar();
   }
-});
+
+  // ===== Start =====
+  setStatus("Loading aircraft…");
+  loadAircraft();
+  setInterval(loadAircraft, 10000);
 </script>
 </body>
 </html>
