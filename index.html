@@ -69,16 +69,31 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
 
 .small { font-size:12px; color:#9fb4d9; }
 
+/* Aircraft icon */
+.aircraft-icon {
+  pointer-events: none;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
+  #container { position: relative; }
+
   #sidebar {
     position: absolute;
+    top: 0;
+    left: 0;
     height: 100%;
     z-index: 999;
+    transform: translateX(-100%);
   }
-  #toggleSidebar {
-    display: block;
+
+  #sidebar:not(.hidden) {
+    transform: translateX(0);
   }
+
+  #map { width: 100%; }
+
+  #toggleSidebar { display: block; }
 }
 </style>
 </head>
@@ -133,7 +148,13 @@ label { display: block; margin-bottom: 6px; font-size: 14px; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+// ===== MAP =====
 const map = L.map("map").setView([34.1, -118.8], 7);
+
+// Hide sidebar by default on mobile
+if (window.innerWidth <= 768) {
+  document.getElementById("sidebar").classList.add("hidden");
+}
 
 // ===== BASEMAPS =====
 const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
@@ -197,9 +218,33 @@ function playAlert(){
   }
 }
 
+function aircraftIcon(type, heading, altitude, color){
+  const symbol = type.includes("Helicopter") ? "🚁" : "✈️";
+  const altFt = altitude ? Math.round(altitude * 3.28084) : null;
+
+  return L.divIcon({
+    className: "aircraft-icon",
+    html: `
+      <div style="
+        transform: rotate(${heading || 0}deg);
+        color:${color};
+        font-size:18px;
+        text-align:center;
+        line-height:1;
+      ">
+        ${symbol}
+        ${altFt ? `<div style="font-size:10px;color:#fff">${altFt} ft</div>` : ""}
+      </div>
+    `,
+    iconSize:[30,30],
+    iconAnchor:[15,15]
+  });
+}
+
 // ===== AIRCRAFT =====
 async function loadAircraft(){
   aircraftLayer.clearLayers();
+
   const res = await fetch(
     "https://opensky-network.org/api/states/all?lamin=32&lamax=35.7&lomin=-121.5&lomax=-114"
   );
@@ -224,21 +269,23 @@ async function loadAircraft(){
 
     const speedKmh = vel ? vel*3.6 : null;
     const type = classifyAircraft(speedKmh, alt);
-    const color=violatedZone?"#ff3333":"#00e5ff";
+    const color = violatedZone ? "#ff3333" : "#00e5ff";
 
     L.polyline(aircraftState[icao].history,{color,weight:2,opacity:0.6})
       .addTo(aircraftLayer);
 
-    L.circleMarker([lat,lon],{radius:5,color})
-      .addTo(aircraftLayer)
-      .bindPopup(`
-        <strong>${type}</strong><br>
-        ICAO: ${icao}<br>
-        Callsign: ${callsign}<br>
-        Altitude: ${alt?Math.round(alt)+" m":"N/A"}<br>
-        Speed: ${speedKmh?Math.round(speedKmh)+" km/h":"N/A"}<br>
-        Heading: ${hdg?Math.round(hdg)+"°":"N/A"}
-      `);
+    L.marker([lat,lon],{
+      icon: aircraftIcon(type, hdg, alt, color)
+    })
+    .addTo(aircraftLayer)
+    .bindPopup(`
+      <strong>${type}</strong><br>
+      ICAO: ${icao}<br>
+      Callsign: ${callsign}<br>
+      Altitude: ${alt ? Math.round(alt*3.28084)+" ft" : "N/A"}<br>
+      Speed: ${speedKmh ? Math.round(speedKmh)+" km/h" : "N/A"}<br>
+      Heading: ${hdg ? Math.round(hdg)+"°" : "N/A"}
+    `);
 
     if(violatedZone && !violations[icao]){
       violations[icao]={icao,callsign,zone:violatedZone,lat,lon,type};
@@ -271,6 +318,12 @@ function toggleLayer(layer){
 function toggleSidebar(){
   document.getElementById("sidebar").classList.toggle("hidden");
 }
+
+map.on("click",()=>{
+  if(window.innerWidth<=768){
+    document.getElementById("sidebar").classList.add("hidden");
+  }
+});
 </script>
 </body>
 </html>
