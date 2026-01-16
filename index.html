@@ -11,7 +11,7 @@
   html, body { margin:0; height:100%; background:#0b1320; color:#e6eefc; font-family:Arial,sans-serif; }
   #container { display:flex; height:100%; }
   #sidebar {
-    width:320px; background:#0f1a2b; padding:12px; box-sizing:border-box;
+    width:340px; background:#0f1a2b; padding:12px; box-sizing:border-box;
     overflow-y:auto; transition:transform .25s ease; border-right:1px solid rgba(255,255,255,.08);
   }
   #map { flex:1; }
@@ -26,11 +26,11 @@
   h2{ margin:0 0 10px; }
   .section{ margin-bottom:14px; }
   label{ display:block; margin-bottom:6px; font-size:14px; }
-  .small{ font-size:12px; color:#9fb4d9; }
+  .small{ font-size:12px; color:#9fb4d9; line-height:1.35; }
 
   .violation{
     background:#1b2a44; border-left:4px solid #ff4444; padding:8px; margin-bottom:8px;
-    font-size:13px; cursor:pointer; border-radius:8px;
+    font-size:13px; cursor:pointer; border-radius:10px;
   }
   .violation:hover{ background:#24365c; }
 
@@ -42,13 +42,47 @@
   .status.bad{ border-color:rgba(255,68,68,.5); background:rgba(255,68,68,.12); color:#ffd6d6; }
   .status.good{ border-color:rgba(0,229,255,.35); background:rgba(0,229,255,.10); color:#d7fbff; }
 
+  button{
+    background:#1b2a44; color:#e6eefc; border:1px solid rgba(255,255,255,.12);
+    border-radius:10px; padding:6px 10px; cursor:pointer; font-size:12px;
+  }
+  button:hover{ background:#24365c; }
+  select{
+    width:100%; margin-top:4px; padding:6px; border-radius:10px;
+    border:1px solid rgba(255,255,255,.12); background:#0b1320; color:#e6eefc;
+  }
+
+  .row{ display:flex; gap:8px; }
+  .row > div{ flex:1; }
+
+  .divider{ height:1px; background:rgba(255,255,255,.08); margin:10px 0; }
+
+  .toggleLine{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:6px 0; }
+  .toggleLine span{ font-size:14px; }
+  .toggleLine small{ display:block; font-size:11px; color:#9fb4d9; margin-top:2px; }
+
+  /* iOS-style switch */
+  .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex:0 0 auto; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255,255,255,.15); transition: .2s; border-radius: 999px;
+    border:1px solid rgba(255,255,255,.15);
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 20px; width: 20px; left: 3px; top: 2px;
+    background-color: white; transition: .2s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: rgba(0,229,255,.35); }
+  input:checked + .slider:before { transform: translateX(20px); }
+
   .aircraft-icon{ pointer-events:none; }
 
   @media (max-width:768px){
     #toggleSidebar{ display:block; }
     #sidebar{
       position:fixed; top:0; left:0; height:100%; z-index:4000;
-      transform:translateX(-105%); width:82vw; max-width:360px; min-width:280px;
+      transform:translateX(-105%); width:86vw; max-width:380px; min-width:290px;
     }
     #sidebar.open{ transform:translateX(0); }
     #backdrop.show{ display:block; }
@@ -59,12 +93,13 @@
     #toggleSidebar{ display:none !important; }
     #backdrop{ display:none !important; }
   }
+
   .leaflet-top.leaflet-left{ top:52px; }
 </style>
 </head>
 
 <body>
-<div id="toggleSidebar" onclick="toggleSidebar()">☰ Layers</div>
+<div id="toggleSidebar" onclick="toggleSidebar()">☰ Map Settings</div>
 <div id="backdrop" onclick="closeSidebar()"></div>
 
 <div id="container">
@@ -79,15 +114,106 @@
     </div>
 
     <div class="section">
-      <strong>Layers</strong>
-      <label><input type="checkbox" checked onclick="toggleLayer(aircraftLayer)"> Aircraft</label>
-      <label><input type="checkbox" checked onclick="toggleLayer(tfrLayer)"> FAA TFRs</label>
-      <label><input type="checkbox" checked onclick="toggleLayer(advisoryLayer)"> Advisory Zones</label>
+      <strong>Map Layers</strong>
+      <div id="layerToggles"></div>
+      <div class="small" style="margin-top:6px;">
+        Tip: turn on only what you need. Proximity filter uses enabled advisory layers.
+      </div>
+    </div>
+
+    <div class="section">
+      <strong>Traffic Filters</strong>
+
+      <div class="divider"></div>
+
+      <strong class="small">Altitude Filter (feet)</strong>
+      <div class="row" style="margin-top:6px;">
+        <div>
+          <div class="small">Min</div>
+          <select id="altMin">
+            <option value="0">0</option>
+            <option value="500">500</option>
+            <option value="1000">1,000</option>
+            <option value="1500">1,500</option>
+            <option value="3000">3,000</option>
+            <option value="5000">5,000</option>
+            <option value="10000">10,000</option>
+          </select>
+        </div>
+        <div>
+          <div class="small">Max</div>
+          <select id="altMax">
+            <option value="1500">1,500</option>
+            <option value="5000">5,000</option>
+            <option value="10000" selected>10,000</option>
+            <option value="20000">20,000</option>
+            <option value="40000">40,000</option>
+            <option value="999999">No limit</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="button" id="presetUas">UAS</button>
+        <button type="button" id="presetLow">Low</button>
+        <button type="button" id="presetAll">All</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="toggleLine">
+        <div>
+          <span>Zone Proximity Filter</span>
+          <small>Only show aircraft near enabled advisory layers</small>
+        </div>
+        <label class="switch">
+          <input id="proxEnabled" type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <label style="margin-top:8px;">
+        <span class="small">Distance (NM)</span>
+        <select id="proxNm">
+          <option value="1">1 NM</option>
+          <option value="3">3 NM</option>
+          <option value="5">5 NM</option>
+          <option value="10" selected>10 NM</option>
+          <option value="20">20 NM</option>
+          <option value="30">30 NM</option>
+        </select>
+      </label>
+
+      <div class="divider"></div>
+
+      <label>
+        <span class="small">Max aircraft rendered (performance)</span>
+        <select id="maxAircraft">
+          <option value="200">200</option>
+          <option value="400" selected>400</option>
+          <option value="800">800</option>
+          <option value="2000">2000</option>
+          <option value="999999">No limit</option>
+        </select>
+      </label>
+
+      <div class="small" style="margin-top:8px;">
+        Defaults are tuned to reduce clutter hard. You can loosen them anytime.
+      </div>
     </div>
 
     <div class="section">
       <strong>Alerts</strong>
-      <label><input type="checkbox" id="soundToggle" checked> Audible Alert</label>
+      <div class="toggleLine">
+        <div>
+          <span>Audible Alert</span>
+          <small>Beep when a track enters a zone</small>
+        </div>
+        <label class="switch">
+          <input id="soundToggle" type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="section">
@@ -99,8 +225,8 @@
       <strong>Feed Status</strong>
       <div id="feedStatus" class="status">Initializing…</div>
       <div class="small" style="margin-top:6px;">
-        Endpoints (Cloudflare Pages): <br>
-        <span class="small">/opensky?lamin=..&lamax=..&lomin=..&lomax=..</span><br>
+        Endpoints (Cloudflare Pages):<br>
+        <span class="small">/opensky?...bbox...</span><br>
         <span class="small">/tfr</span>
       </div>
     </div>
@@ -122,9 +248,11 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+  // =========================
+  // Map + basemaps
+  // =========================
   const map = L.map("map").setView([34.1, -118.8], 7);
 
-  // Basemaps
   const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
   const baseDark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
   const baseSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
@@ -136,38 +264,39 @@
     if(type==="sat") baseSat.addTo(map);
   }
 
-  // Layers
+  // =========================
+  // Layer groups (library)
+  // =========================
   const aircraftLayer = L.layerGroup().addTo(map);
   const tfrLayer = L.layerGroup().addTo(map);
-  const advisoryLayer = L.layerGroup().addTo(map);
 
-  // State
-  const aircraftState = {};
-  const violations = {};
+  const stadiumsLayer = L.layerGroup().addTo(map);
+  const airportsLayer = L.layerGroup().addTo(map);
+  const parksLayer = L.layerGroup().addTo(map);
+  const localAdvisoriesLayer = L.layerGroup().addTo(map);
 
-  // Zones
-  const advisoryZones = [
-    { name:"Disneyland", lat:33.8121, lon:-117.9190, radius:5560 },
-    { name:"Dodger Stadium", lat:34.0739, lon:-118.2400, radius:5560 },
-    { name:"SoFi Stadium", lat:33.9535, lon:-118.3390, radius:5560 }
-  ];
+  // Placeholders for later (KML/GeoJSON)
+  const suaLayer = L.layerGroup();          // Special Use Airspace (later)
+  const nsUasLayer = L.layerGroup();        // National Security UAS (later)
+  const satrLayer = L.layerGroup();         // Special Air Traffic Rules (later)
+  const geoPortalLayer = L.layerGroup();    // Geo Portal Advisories (later)
 
-  advisoryZones.forEach(z => {
-    L.circle([z.lat,z.lon],{
-      radius:z.radius, color:"#ff9800", dashArray:"6,6", fillOpacity:0.1
-    }).bindPopup(`<strong>${z.name}</strong><br>Advisory – NOTAM pending`)
-      .addTo(advisoryLayer);
-  });
-
-  // Cloudflare Pages Functions endpoints (relative)
+  // =========================
+  // Endpoints
+  // =========================
   const OPENSKY_BBOX = "lamin=32&lamax=35.7&lomin=-121.5&lomax=-114";
   const OPENSKY_URL = `/opensky?${OPENSKY_BBOX}`;
   const TFR_URL = `/tfr`;
 
-  // Helpers
-  function classifyAircraft(speedKmh, altitudeM){
-    if(speedKmh && speedKmh < 150 && altitudeM && altitudeM < 3000) return "Helicopter (est.)";
-    return "Fixed-wing (est.)";
+  // =========================
+  // Utility
+  // =========================
+  function setStatus(text, good=false, bad=false){
+    const el = document.getElementById("feedStatus");
+    el.textContent = text;
+    el.classList.remove("good","bad");
+    if(good) el.classList.add("good");
+    if(bad) el.classList.add("bad");
   }
 
   function playAlert(){
@@ -178,39 +307,333 @@
     }
   }
 
-  function setStatus(text, good=false, bad=false){
-    const el = document.getElementById("feedStatus");
-    el.textContent = text;
-    el.classList.remove("good","bad");
-    if(good) el.classList.add("good");
-    if(bad) el.classList.add("bad");
+  function metersToFeet(m){ return (typeof m === "number") ? (m * 3.28084) : null; }
+  function nmToMeters(nm){ return nm * 1852; }
+
+  function classifyAircraft(speedKmh, altitudeM){
+    if(speedKmh && speedKmh < 150 && altitudeM && altitudeM < 3000) return "Helicopter (est.)";
+    return "Fixed-wing (est.)";
   }
 
-  function aircraftIcon(type, heading, altitude, color){
+  function aircraftIcon(type, heading, altitudeM, color){
     const symbol = type.includes("Helicopter") ? "🚁" : "✈️";
-    const altFt = altitude ? Math.round(altitude * 3.28084) : null;
+    const altFt = metersToFeet(altitudeM);
+    const altText = (altFt !== null) ? `${Math.round(altFt)} ft` : "";
 
     return L.divIcon({
       className: "aircraft-icon",
       html: `
         <div style="
           transform: rotate(${heading || 0}deg);
-          color:${color};
           font-size:18px;
           text-align:center;
           line-height:1;
           filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
         ">
-          ${symbol}
-          ${altFt ? `<div style="font-size:10px;color:#fff;transform: rotate(${-(heading||0)}deg);">${altFt} ft</div>` : ""}
+          <div style="color:${color};">${symbol}</div>
+          ${altText ? `<div style="font-size:10px;color:#fff;transform: rotate(${-(heading||0)}deg);">${altText}</div>` : ""}
         </div>
       `,
-      iconSize:[34,34],
-      iconAnchor:[17,17]
+      iconSize:[36,36],
+      iconAnchor:[18,18]
     });
   }
 
-  // TFR load
+  // =========================
+  // Data sets (starter library)
+  // NOTE: These are advisory approximations to start. You can replace with KML/GeoJSON later.
+  // =========================
+
+  // Stadium/event-like zones (static circles; NOT schedule-aware)
+  const stadiumZones = [
+    { name:"SoFi Stadium", lat:33.9535, lon:-118.3390, radius_m:5560 },     // 3 NM
+    { name:"Dodger Stadium", lat:34.0739, lon:-118.2400, radius_m:5560 },
+    { name:"Angel Stadium", lat:33.8003, lon:-117.8827, radius_m:5560 },
+    { name:"Petco Park", lat:32.7073, lon:-117.1573, radius_m:5560 },
+    { name:"Rose Bowl", lat:34.1613, lon:-118.1675, radius_m:5560 },
+    { name:"LA Memorial Coliseum", lat:34.0141, lon:-118.2879, radius_m:5560 }
+  ];
+
+  // Airports (points + small rings for awareness; NOT controlled airspace polygons)
+  // Ring is just a visual "heads up" buffer, not legal boundary.
+  const airports = [
+    { code:"LAX", name:"Los Angeles Intl", lat:33.9425, lon:-118.4081 },
+    { code:"BUR", name:"Hollywood Burbank", lat:34.2007, lon:-118.3587 },
+    { code:"VNY", name:"Van Nuys", lat:34.2098, lon:-118.4899 },
+    { code:"SNA", name:"John Wayne", lat:33.6757, lon:-117.8682 },
+    { code:"LGB", name:"Long Beach", lat:33.8177, lon:-118.1516 },
+    { code:"ONT", name:"Ontario Intl", lat:34.0560, lon:-117.6012 },
+    { code:"SAN", name:"San Diego Intl", lat:32.7338, lon:-117.1933 },
+    { code:"SBA", name:"Santa Barbara", lat:34.4262, lon:-119.8404 },
+    { code:"OXR", name:"Oxnard", lat:34.2008, lon:-119.2072 },
+    { code:"CMA", name:"Camarillo", lat:34.2138, lon:-119.0944 },
+    { code:"SMX", name:"Santa Maria", lat:34.8994, lon:-120.4579 },
+    { code:"MRY", name:"Monterey", lat:36.5870, lon:-121.8429 },
+    { code:"SJC", name:"San Jose Intl", lat:37.3639, lon:-121.9289 },
+    { code:"SFO", name:"San Francisco Intl", lat:37.6213, lon:-122.3790 },
+    { code:"OAK", name:"Oakland Intl", lat:37.7126, lon:-122.2197 },
+    { code:"FAT", name:"Fresno Yosemite Intl", lat:36.7762, lon:-119.7181 }
+  ];
+
+  // National Parks (approx circles centered; replace with real polygons later)
+  const parks = [
+    { name:"Channel Islands NP", lat:34.0060, lon:-119.7780, radius_m:35000 },
+    { name:"Joshua Tree NP", lat:33.8734, lon:-115.9010, radius_m:45000 },
+    { name:"Death Valley NP", lat:36.5054, lon:-117.0794, radius_m:90000 },
+    { name:"Sequoia NP", lat:36.4864, lon:-118.5658, radius_m:55000 },
+    { name:"Kings Canyon NP", lat:36.8879, lon:-118.5551, radius_m:55000 },
+    { name:"Yosemite NP", lat:37.8651, lon:-119.5383, radius_m:60000 }
+  ];
+
+  // Local advisories (your custom circles — you can add anything here)
+  const localAdvisories = [
+    { name:"Disneyland (Local Advisory)", lat:33.8121, lon:-117.9190, radius_m:5560 },
+    { name:"Downtown LA (Local Advisory)", lat:34.0522, lon:-118.2437, radius_m:6000 }
+  ];
+
+  // =========================
+  // Draw library layers
+  // =========================
+  function drawStadiums(){
+    stadiumsLayer.clearLayers();
+    stadiumZones.forEach(z=>{
+      L.circle([z.lat,z.lon],{
+        radius:z.radius_m,
+        color:"#ff9800",
+        dashArray:"6,6",
+        weight:2,
+        fillOpacity:0.08
+      }).bindPopup(`<strong>${z.name}</strong><br>Static event-zone ring (advisory)`)
+        .addTo(stadiumsLayer);
+    });
+  }
+
+  function drawAirports(){
+    airportsLayer.clearLayers();
+    airports.forEach(a=>{
+      const ring = 3; // NM advisory ring
+      L.circle([a.lat,a.lon],{
+        radius:nmToMeters(ring),
+        color:"#7dd3fc",
+        weight:2,
+        fillOpacity:0.05
+      }).bindPopup(`<strong>${a.code}</strong> — ${a.name}<br>Advisory ring: ${ring} NM`)
+        .addTo(airportsLayer);
+
+      L.circleMarker([a.lat,a.lon],{ radius:4, color:"#7dd3fc" })
+        .bindPopup(`<strong>${a.code}</strong> — ${a.name}`)
+        .addTo(airportsLayer);
+    });
+  }
+
+  function drawParks(){
+    parksLayer.clearLayers();
+    parks.forEach(p=>{
+      L.circle([p.lat,p.lon],{
+        radius:p.radius_m,
+        color:"#34d399",
+        weight:2,
+        fillOpacity:0.06
+      }).bindPopup(`<strong>${p.name}</strong><br>Approx advisory area (replace with polygons later)`)
+        .addTo(parksLayer);
+    });
+  }
+
+  function drawLocalAdvisories(){
+    localAdvisoriesLayer.clearLayers();
+    localAdvisories.forEach(z=>{
+      L.circle([z.lat,z.lon],{
+        radius:z.radius_m,
+        color:"#fbbf24",
+        dashArray:"3,6",
+        weight:2,
+        fillOpacity:0.06
+      }).bindPopup(`<strong>${z.name}</strong><br>Custom advisory`)
+        .addTo(localAdvisoriesLayer);
+    });
+  }
+
+  drawStadiums();
+  drawAirports();
+  drawParks();
+  drawLocalAdvisories();
+
+  // =========================
+  // Layer library config (sidebar toggles)
+  // =========================
+  const layerLibrary = [
+    { id:"aircraft", name:"Aircraft", desc:"Live tracks (filtered)", layer: aircraftLayer, defaultOn:true },
+    { id:"tfr", name:"Temporary Flight Restrictions", desc:"FAA TFR GeoJSON", layer: tfrLayer, defaultOn:true },
+
+    { id:"stadiums", name:"Stadiums / Event Zones", desc:"Static rings (advisory)", layer: stadiumsLayer, defaultOn:true },
+    { id:"airports", name:"Airports", desc:"Points + advisory rings", layer: airportsLayer, defaultOn:true },
+    { id:"parks", name:"National Parks", desc:"Approx areas (advisory)", layer: parksLayer, defaultOn:true },
+    { id:"local", name:"Local Advisories", desc:"Your custom zones", layer: localAdvisoriesLayer, defaultOn:true },
+
+    // Placeholders for later
+    { id:"sua", name:"Special Use Airspace", desc:"(Add KML/GeoJSON later)", layer: suaLayer, defaultOn:false, placeholder:true },
+    { id:"ns", name:"National Security UAS Restrictions", desc:"(Add later)", layer: nsUasLayer, defaultOn:false, placeholder:true },
+    { id:"satr", name:"Special Air Traffic Rules", desc:"(Add later)", layer: satrLayer, defaultOn:false, placeholder:true },
+    { id:"geo", name:"Geo Portal Advisories", desc:"(Add later)", layer: geoPortalLayer, defaultOn:false, placeholder:true },
+  ];
+
+  function initLayerToggles(){
+    const box = document.getElementById("layerToggles");
+    box.innerHTML = "";
+
+    layerLibrary.forEach(item=>{
+      const row = document.createElement("div");
+      row.className = "toggleLine";
+
+      const left = document.createElement("div");
+      const title = document.createElement("span");
+      title.textContent = item.name;
+      const desc = document.createElement("small");
+      desc.textContent = item.desc + (item.placeholder ? " — placeholder" : "");
+      left.appendChild(title);
+      left.appendChild(desc);
+
+      const wrap = document.createElement("label");
+      wrap.className = "switch";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.id = "toggle_" + item.id;
+      input.checked = item.defaultOn && !item.placeholder;
+
+      const slider = document.createElement("span");
+      slider.className = "slider";
+
+      wrap.appendChild(input);
+      wrap.appendChild(slider);
+
+      row.appendChild(left);
+      row.appendChild(wrap);
+      box.appendChild(row);
+
+      // apply initial state
+      if(input.checked) map.addLayer(item.layer);
+      else map.removeLayer(item.layer);
+
+      // placeholders start disabled (toggle still works if you later populate)
+      input.addEventListener("change", ()=>{
+        if(input.checked) map.addLayer(item.layer);
+        else map.removeLayer(item.layer);
+        // refresh aircraft immediately if proximity filter depends on enabled layers
+        loadAircraft();
+      });
+    });
+  }
+
+  initLayerToggles();
+
+  // =========================
+  // Proximity + altitude filters
+  // =========================
+  function getAltFilter(){
+    const minFt = parseFloat(document.getElementById("altMin")?.value ?? "0");
+    const maxFt = parseFloat(document.getElementById("altMax")?.value ?? "999999");
+    return { minFt, maxFt };
+  }
+
+  function altitudePasses(altMeters){
+    const ft = metersToFeet(altMeters);
+    if(ft === null) return false; // hide unknown-alt targets to reduce noise
+    const { minFt, maxFt } = getAltFilter();
+    return ft >= minFt && ft <= maxFt;
+  }
+
+  function proximityEnabled(){
+    return document.getElementById("proxEnabled")?.checked;
+  }
+
+  function getProxMeters(){
+    const nm = parseFloat(document.getElementById("proxNm")?.value ?? "10");
+    return nmToMeters(nm);
+  }
+
+  function getMaxAircraft(){
+    return parseInt(document.getElementById("maxAircraft")?.value ?? "400", 10);
+  }
+
+  // Define "zones that matter" for proximity checks based on enabled layers
+  function enabledZoneSources(){
+    const sources = [];
+
+    // Stadiums layer enabled?
+    if(map.hasLayer(stadiumsLayer)){
+      stadiumZones.forEach(z => sources.push({ lat:z.lat, lon:z.lon, radius_m:z.radius_m }));
+    }
+
+    // Airports layer enabled? Use airport point with buffer ring (3 NM)
+    if(map.hasLayer(airportsLayer)){
+      airports.forEach(a => sources.push({ lat:a.lat, lon:a.lon, radius_m:nmToMeters(3) }));
+    }
+
+    // Parks layer enabled? Use their advisory radius
+    if(map.hasLayer(parksLayer)){
+      parks.forEach(p => sources.push({ lat:p.lat, lon:p.lon, radius_m:p.radius_m }));
+    }
+
+    // Local advisories enabled?
+    if(map.hasLayer(localAdvisoriesLayer)){
+      localAdvisories.forEach(z => sources.push({ lat:z.lat, lon:z.lon, radius_m:z.radius_m }));
+    }
+
+    return sources;
+  }
+
+  function passesProximity(lat, lon){
+    if(!proximityEnabled()) return true;
+
+    const sources = enabledZoneSources();
+    if(sources.length === 0) return true; // no enabled zones => don't hide everything
+
+    const buffer = getProxMeters();
+
+    // within (zone radius + buffer)
+    for(const z of sources){
+      const d = map.distance([lat,lon],[z.lat,z.lon]);
+      if(d <= (z.radius_m + buffer)) return true;
+    }
+    return false;
+  }
+
+  // =========================
+  // Violations tracking
+  // =========================
+  const aircraftState = {};
+  const violations = {};
+
+  function updateViolationList(){
+    const box=document.getElementById("violationList");
+    box.innerHTML="";
+    Object.values(violations).forEach(v=>{
+      const d=document.createElement("div");
+      d.className="violation";
+      d.innerHTML=`<strong>${v.callsign}</strong><br>${v.type}<br>Zone: ${v.zone}`;
+      d.onclick=()=>{ closeSidebar(); map.setView([v.lat,v.lon],12); };
+      box.appendChild(d);
+    });
+    if(!box.innerHTML) box.innerHTML="No active violations";
+  }
+
+  // Create a unified "violation zone check" against stadium zones + local advisories (you can expand later)
+  function findViolationZone(lat, lon){
+    // Stadium zones
+    for(const z of stadiumZones){
+      if(map.distance([lat,lon],[z.lat,z.lon]) < z.radius_m) return z.name;
+    }
+    // Local advisories
+    for(const z of localAdvisories){
+      if(map.distance([lat,lon],[z.lat,z.lon]) < z.radius_m) return z.name;
+    }
+    return null;
+  }
+
+  // =========================
+  // TFR Load
+  // =========================
   async function loadTFR(){
     try{
       const res = await fetch(TFR_URL, { cache:"no-store" });
@@ -225,12 +648,22 @@
 
       return true;
     } catch(e){
+      console.warn("TFR load failed:", e);
       return false;
     }
   }
 
-  // Aircraft load
+  // =========================
+  // Aircraft Load (filtered + capped)
+  // =========================
   async function loadAircraft(){
+    // If aircraft layer is toggled off, do nothing
+    if(!map.hasLayer(aircraftLayer)){
+      aircraftLayer.clearLayers();
+      setStatus("Aircraft layer OFF. Toggle it on to view tracks.");
+      return;
+    }
+
     aircraftLayer.clearLayers();
 
     let data;
@@ -248,24 +681,49 @@
       return;
     }
 
-    setStatus(`Aircraft OK • ${data.states.length} tracks`, true, false);
-
-    data.states.forEach(s=>{
+    // Pre-filter list before drawing
+    const tracks = [];
+    for(const s of data.states){
       const icao=s[0], callsign=s[1]?.trim()||"N/A";
       const lon=s[5], lat=s[6], alt=s[7], vel=s[9], hdg=s[10];
-      if(!lat||!lon) return;
+      if(!lat || !lon) continue;
+      if(!altitudePasses(alt)) continue;
+      if(!passesProximity(lat, lon)) continue;
+
+      // compute simple score: closer to any zone = higher priority (draw first)
+      let score = 0;
+      const sources = enabledZoneSources();
+      if(proximityEnabled() && sources.length){
+        let best = Infinity;
+        for(const z of sources){
+          const d = map.distance([lat,lon],[z.lat,z.lon]);
+          best = Math.min(best, d);
+        }
+        score = -best; // closer => larger (less negative)
+      }
+      tracks.push({ icao, callsign, lat, lon, alt, vel, hdg, score });
+    }
+
+    // Sort so “most relevant” draw first when proximity is on
+    tracks.sort((a,b)=>b.score - a.score);
+
+    const max = getMaxAircraft();
+    const sliced = tracks.slice(0, max);
+
+    const proxTxt = proximityEnabled() ? ` • prox ON (${document.getElementById("proxNm").value} NM)` : "";
+    setStatus(`Aircraft OK • showing ${sliced.length}/${tracks.length} (filtered)${proxTxt}`, true, false);
+
+    for(const t of sliced){
+      const { icao, callsign, lat, lon, alt, vel, hdg } = t;
 
       if(!aircraftState[icao]) aircraftState[icao]={ history:[] };
       aircraftState[icao].history.push([lat,lon]);
       if(aircraftState[icao].history.length>6) aircraftState[icao].history.shift();
 
-      let violatedZone=null;
-      advisoryZones.forEach(z=>{
-        if(map.distance([lat,lon],[z.lat,z.lon])<z.radius) violatedZone=z.name;
-      });
-
       const speedKmh = vel ? vel*3.6 : null;
       const type = classifyAircraft(speedKmh, alt);
+
+      const violatedZone = findViolationZone(lat, lon);
       const color = violatedZone ? "#ff3333" : "#00e5ff";
 
       L.polyline(aircraftState[icao].history,{color,weight:2,opacity:0.6}).addTo(aircraftLayer);
@@ -276,9 +734,10 @@
           <strong>${type}</strong><br>
           ICAO: ${icao}<br>
           Callsign: ${callsign}<br>
-          Altitude: ${alt ? Math.round(alt*3.28084)+" ft" : "N/A"}<br>
+          Altitude: ${alt ? Math.round(metersToFeet(alt))+" ft" : "N/A"}<br>
           Speed: ${speedKmh ? Math.round(speedKmh)+" km/h" : "N/A"}<br>
-          Heading: ${hdg ? Math.round(hdg)+"°" : "N/A"}
+          Heading: ${hdg ? Math.round(hdg)+"°" : "N/A"}<br>
+          ${violatedZone ? `<br><strong style="color:#ff4444;">In Zone: ${violatedZone}</strong>` : ""}
         `);
 
       if(violatedZone && !violations[icao]){
@@ -286,27 +745,12 @@
         playAlert();
         updateViolationList();
       }
-    });
+    }
   }
 
-  function updateViolationList(){
-    const box=document.getElementById("violationList");
-    box.innerHTML="";
-    Object.values(violations).forEach(v=>{
-      const d=document.createElement("div");
-      d.className="violation";
-      d.innerHTML=`<strong>${v.callsign}</strong><br>${v.type}<br>Zone: ${v.zone}`;
-      d.onclick=()=>{ closeSidebar(); map.setView([v.lat,v.lon],12); };
-      box.appendChild(d);
-    });
-    if(!box.innerHTML) box.innerHTML="No active violations";
-  }
-
-  function toggleLayer(layer){
-    map.hasLayer(layer)?map.removeLayer(layer):map.addLayer(layer);
-  }
-
+  // =========================
   // Mobile sidebar
+  // =========================
   function isMobile(){ return window.innerWidth <= 768; }
   function openSidebar(){ if(!isMobile()) return; document.getElementById("sidebar").classList.add("open"); document.getElementById("backdrop").classList.add("show"); }
   function closeSidebar(){ document.getElementById("sidebar").classList.remove("open"); document.getElementById("backdrop").classList.remove("show"); }
@@ -314,18 +758,48 @@
   map.on("click", ()=>{ if(isMobile()) closeSidebar(); });
   if (isMobile()) closeSidebar();
 
-  // Start
+  // =========================
+  // UI wiring
+  // =========================
+  function wireFilters(){
+    // altitude
+    ["altMin","altMax"].forEach(id=>{
+      document.getElementById(id)?.addEventListener("change", loadAircraft);
+    });
+
+    document.getElementById("presetUas")?.addEventListener("click", ()=>{
+      document.getElementById("altMin").value = "0";
+      document.getElementById("altMax").value = "1500";
+      loadAircraft();
+    });
+    document.getElementById("presetLow")?.addEventListener("click", ()=>{
+      document.getElementById("altMin").value = "0";
+      document.getElementById("altMax").value = "5000";
+      loadAircraft();
+    });
+    document.getElementById("presetAll")?.addEventListener("click", ()=>{
+      document.getElementById("altMin").value = "0";
+      document.getElementById("altMax").value = "999999";
+      loadAircraft();
+    });
+
+    // proximity
+    ["proxEnabled","proxNm","maxAircraft"].forEach(id=>{
+      document.getElementById(id)?.addEventListener("change", loadAircraft);
+    });
+  }
+  wireFilters();
+
+  // =========================
+  // Start + polling
+  // =========================
   (async ()=>{
     setStatus("Loading aircraft + TFR…");
-    const tfrOk = await loadTFR();
+    await loadTFR();
     await loadAircraft();
-    if(!tfrOk){
-      // Don’t overwrite aircraft status if aircraft succeeded; just warn in console.
-      console.warn("TFR load failed. Check /functions/tfr.js and /tfr endpoint.");
-    }
   })();
 
-  // Poll slower to help avoid upstream rate limits
+  // Poll slower to reduce upstream pressure
   setInterval(loadAircraft, 20000);
   setInterval(loadTFR, 120000);
 </script>
