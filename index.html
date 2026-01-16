@@ -3,89 +3,110 @@
 <head>
 <meta charset="UTF-8" />
 <title>AIRSMET – Airspace Situational Awareness</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
 
 <style>
-body {
+html, body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0b1220;
-  color: #fff;
-}
-#sidebar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 260px;
+  padding: 0;
   height: 100%;
-  background: #0e1628;
+  background: #0b1320;
+  color: #e6eefc;
+  font-family: Arial, sans-serif;
+}
+
+#container {
+  display: flex;
+  height: 100%;
+}
+
+#sidebar {
+  width: 260px;
+  background: #0f1a2b;
   padding: 15px;
-  z-index: 1000;
+  box-sizing: border-box;
 }
+
 #map {
-  position: absolute;
-  left: 260px;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1;
 }
+
 h2 {
   margin-top: 0;
+  font-size: 18px;
 }
+
+.section {
+  margin-bottom: 15px;
+}
+
 label {
   display: block;
-  margin: 6px 0;
+  margin-bottom: 6px;
 }
+
 .status {
   font-size: 12px;
-  opacity: 0.85;
-  margin-top: 10px;
+  color: #9fb4d9;
 }
 </style>
 </head>
 
 <body>
+<div id="container">
+  <div id="sidebar">
+    <h2>AIRSMET</h2>
+    <div class="section">
+      <strong>Map View</strong>
+      <label><input type="radio" name="basemap" checked onclick="setBase('standard')"> Standard</label>
+      <label><input type="radio" name="basemap" onclick="setBase('dark')"> Dark</label>
+      <label><input type="radio" name="basemap" onclick="setBase('sat')"> Satellite</label>
+    </div>
 
-<div id="sidebar">
-  <h2>AIRSMET</h2>
+    <div class="section">
+      <strong>Layers</strong>
+      <label><input type="checkbox" checked onclick="toggleLayer(aircraftLayer)"> ADS-B Aircraft</label>
+      <label><input type="checkbox" checked onclick="toggleLayer(tfrLayer)"> TFRs (FAA)</label>
+      <label><input type="checkbox" checked onclick="toggleLayer(regionLayer)"> Region Boundary</label>
+      <label><input type="checkbox" onclick="toggleLayer(notamLayer)"> NOTAMs (Pending)</label>
+    </div>
 
-  <strong>Map View</strong>
-  <label><input type="radio" name="basemap" checked onclick="setBase('standard')"> Standard</label>
-  <label><input type="radio" name="basemap" onclick="setBase('dark')"> Dark</label>
-  <label><input type="radio" name="basemap" onclick="setBase('sat')"> Satellite</label>
-
-  <hr>
-
-  <strong>Layers</strong>
-  <label><input type="checkbox" checked onchange="toggleLayer(aircraftLayer)"> ADS-B Aircraft</label>
-  <label><input type="checkbox" checked onchange="toggleLayer(trailLayer)"> Aircraft Trails</label>
-  <label><input type="checkbox" checked onchange="toggleLayer(tfrLayer)"> TFRs</label>
-  <label><input type="checkbox" checked onchange="toggleLayer(notamLayer)"> NOTAMs</label>
-
-  <div class="status">
-    Region: Southern California<br>
-    Mode: Demo<br>
-    Data: OpenSky + FAA
+    <div class="section status">
+      Region: CA / SoCal Expanded<br>
+      Aircraft: OpenSky (Live)<br>
+      TFRs: FAA GeoJSON (Live)<br>
+      NOTAMs: FAA API (Pending)
+    </div>
   </div>
-</div>
 
-<div id="map"></div>
+  <div id="map"></div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// ================= MAP BASES =================
-const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-const baseDark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
-const baseSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
+const map = L.map("map").setView([34.2, -118.8], 7);
 
-const map = L.map("map", {
-  center: [34.3, -119.2],
-  zoom: 9,
-  layers: [baseStandard]
-});
+// --- BASEMAPS ---
+const baseStandard = L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 18 }
+).addTo(map);
+
+const baseDark = L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  { maxZoom: 18 }
+);
+
+const baseSat = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 18 }
+);
 
 function setBase(type) {
   map.eachLayer(l => {
@@ -98,93 +119,89 @@ function setBase(type) {
   if (type === "sat") baseSat.addTo(map);
 }
 
-function toggleLayer(layer) {
-  if (map.hasLayer(layer)) map.removeLayer(layer);
-  else map.addLayer(layer);
-}
+// --- REGION BOUNDARY ---
+const regionLayer = L.rectangle(
+  [[32.0, -121.5], [35.7, -114.0]],
+  { color: "red", weight: 1, fillOpacity: 0.05 }
+).addTo(map);
 
-// ================= LAYERS =================
+// --- AIRCRAFT ---
 const aircraftLayer = L.layerGroup().addTo(map);
-const trailLayer = L.layerGroup().addTo(map);
-const tfrLayer = L.layerGroup().addTo(map);
-const notamLayer = L.layerGroup().addTo(map);
-
-// ================= AIRCRAFT + TRAILS =================
-const aircraftTracks = {};
+const aircraftHistory = {};
 
 async function loadAircraft() {
-  const url = "https://opensky-network.org/api/states/all?lamin=33.5&lomin=-121&lamax=35&lomax=-117";
+  aircraftLayer.clearLayers();
+
+  const url =
+    "https://opensky-network.org/api/states/all?" +
+    "lamin=32.0&lamax=35.7&lomin=-121.5&lomax=-114.0";
+
   const res = await fetch(url);
   const data = await res.json();
-
-  aircraftLayer.clearLayers();
-  trailLayer.clearLayers();
-
   if (!data.states) return;
 
   data.states.forEach(s => {
     const icao = s[0];
-    const lat = s[6];
+    const callsign = s[1]?.trim() || "Unknown";
     const lon = s[5];
-
+    const lat = s[6];
     if (!lat || !lon) return;
 
-    if (!aircraftTracks[icao]) aircraftTracks[icao] = [];
-    aircraftTracks[icao].push([lat, lon]);
+    if (!aircraftHistory[icao]) aircraftHistory[icao] = [];
+    aircraftHistory[icao].push([lat, lon]);
+    if (aircraftHistory[icao].length > 15) aircraftHistory[icao].shift();
 
-    if (aircraftTracks[icao].length > 12)
-      aircraftTracks[icao].shift();
+    L.polyline(aircraftHistory[icao], {
+      color: "#00ffff",
+      weight: 1
+    }).addTo(aircraftLayer);
 
     L.circleMarker([lat, lon], {
       radius: 4,
-      color: "#00d0ff"
+      color: "#00ffff"
     }).addTo(aircraftLayer)
-      .bindPopup(`ICAO: ${icao}`);
-
-    L.polyline(aircraftTracks[icao], {
-      color: "#00d0ff",
-      weight: 1,
-      opacity: 0.6
-    }).addTo(trailLayer);
+      .bindPopup(`
+        <strong>Aircraft</strong><br>
+        ICAO: ${icao}<br>
+        Callsign: ${callsign}
+      `);
   });
 }
 
-setInterval(loadAircraft, 8000);
 loadAircraft();
+setInterval(loadAircraft, 10000);
 
-// ================= TFRs =================
-fetch("https://tfr.faa.gov/tfr_map_ims_data.json")
-  .then(r => r.json())
+// --- TFRs (FAA LIVE) ---
+const tfrLayer = L.layerGroup().addTo(map);
+
+fetch("https://tfr.faa.gov/tfrapi/geojson")
+  .then(res => res.json())
   .then(data => {
-    data.features.forEach(f => {
-      const coords = f.geometry.coordinates[0].map(c => [c[1], c[0]]);
-      L.polygon(coords, {
-        color: "red",
-        fillOpacity: 0.2
-      }).addTo(tfrLayer)
-        .bindPopup("FAA Temporary Flight Restriction");
-    });
+    L.geoJSON(data, {
+      style: {
+        color: "#ff4444",
+        weight: 2,
+        fillOpacity: 0.15
+      },
+      onEachFeature: (f, l) => {
+        l.bindPopup(`
+          <strong>TFR</strong><br>
+          ${f.properties?.description || "FAA Temporary Flight Restriction"}
+        `);
+      }
+    }).addTo(tfrLayer);
   });
 
-// ================= NOTAMS (DEMO STRUCTURE) =================
-const demoNotams = [
-  {
-    name: "Disneyland Stadium TFR",
-    lat: 33.8121,
-    lon: -117.9190,
-    radius: 5560
-  }
-];
+// --- NOTAM PLACEHOLDER ---
+const notamLayer = L.layerGroup();
+L.marker([33.8121, -117.9190], { opacity: 0.7 })
+  .bindPopup("NOTAM data pending FAA API approval")
+  .addTo(notamLayer);
 
-demoNotams.forEach(n => {
-  L.circle([n.lat, n.lon], {
-    radius: n.radius,
-    color: "orange",
-    fillOpacity: 0.15
-  }).addTo(notamLayer)
-    .bindPopup(n.name);
-});
+// --- TOGGLE ---
+function toggleLayer(layer) {
+  map.hasLayer(layer) ? map.removeLayer(layer) : map.addLayer(layer);
+}
 </script>
-
 </body>
 </html>
