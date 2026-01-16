@@ -5,51 +5,36 @@
 <title>AIRSMET – Airspace Situational Awareness</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
 html, body {
   margin: 0;
-  padding: 0;
   height: 100%;
   background: #0b1320;
   color: #e6eefc;
   font-family: Arial, sans-serif;
 }
 
-#container {
-  display: flex;
-  height: 100%;
-}
-
+#container { display: flex; height: 100%; }
 #sidebar {
-  width: 260px;
+  width: 270px;
   background: #0f1a2b;
   padding: 15px;
   box-sizing: border-box;
 }
+#map { flex: 1; }
 
-#map {
-  flex: 1;
+h2 { margin-top: 0; }
+
+.section { margin-bottom: 14px; }
+label { display: block; margin-bottom: 6px; font-size: 14px; }
+
+.alert {
+  color: #ffb020;
+  font-size: 13px;
+  margin-top: 6px;
 }
-
-h2 {
-  margin-top: 0;
-  font-size: 18px;
-}
-
-.section {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 6px;
-}
-
 .status {
   font-size: 12px;
   color: #9fb4d9;
@@ -61,6 +46,7 @@ label {
 <div id="container">
   <div id="sidebar">
     <h2>AIRSMET</h2>
+
     <div class="section">
       <strong>Map View</strong>
       <label><input type="radio" name="basemap" checked onclick="setBase('standard')"> Standard</label>
@@ -70,18 +56,19 @@ label {
 
     <div class="section">
       <strong>Layers</strong>
-      <label><input type="checkbox" checked onclick="toggleLayer(aircraftLayer)"> ADS-B Aircraft</label>
-      <label><input type="checkbox" checked onclick="toggleLayer(tfrLayer)"> TFRs (FAA)</label>
-      <label><input type="checkbox" checked onclick="toggleLayer(regionLayer)"> Region Boundary</label>
-      <label><input type="checkbox" onclick="toggleLayer(notamLayer)"> NOTAMs (Pending)</label>
+      <label><input type="checkbox" checked onclick="toggleLayer(aircraftLayer)"> Aircraft</label>
+      <label><input type="checkbox" checked onclick="toggleLayer(tfrLayer)"> FAA TFRs</label>
+      <label><input type="checkbox" checked onclick="toggleLayer(advisoryLayer)"> Advisory Restriction Zones</label>
     </div>
 
     <div class="section status">
-      Region: CA / SoCal Expanded<br>
+      Region: CA (SLO → NV → MX)<br>
       Aircraft: OpenSky (Live)<br>
       TFRs: FAA GeoJSON (Live)<br>
-      NOTAMs: FAA API (Pending)
+      Advisory Zones: Informational
     </div>
+
+    <div id="alertBox" class="alert"></div>
   </div>
 
   <div id="map"></div>
@@ -90,117 +77,92 @@ label {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-const map = L.map("map").setView([34.2, -118.8], 7);
+const map = L.map("map").setView([34.1, -118.8], 7);
 
-// --- BASEMAPS ---
-const baseStandard = L.tileLayer(
-  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { maxZoom: 18 }
-).addTo(map);
+// ===== BASEMAPS =====
+const baseStandard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+const baseDark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
+const baseSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
 
-const baseDark = L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  { maxZoom: 18 }
-);
-
-const baseSat = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  { maxZoom: 18 }
-);
-
-function setBase(type) {
-  map.eachLayer(l => {
-    if (l === baseStandard || l === baseDark || l === baseSat) {
-      map.removeLayer(l);
-    }
-  });
-  if (type === "standard") baseStandard.addTo(map);
-  if (type === "dark") baseDark.addTo(map);
-  if (type === "sat") baseSat.addTo(map);
+function setBase(type){
+  [baseStandard, baseDark, baseSat].forEach(b => map.removeLayer(b));
+  if(type==="standard") baseStandard.addTo(map);
+  if(type==="dark") baseDark.addTo(map);
+  if(type==="sat") baseSat.addTo(map);
 }
 
-// --- REGION BOUNDARY ---
-const regionLayer = L.rectangle(
-  [[32.0, -121.5], [35.7, -114.0]],
-  { color: "red", weight: 1, fillOpacity: 0.05 }
-).addTo(map);
-
-// --- AIRCRAFT ---
+// ===== LAYERS =====
 const aircraftLayer = L.layerGroup().addTo(map);
-const aircraftHistory = {};
+const tfrLayer = L.layerGroup().addTo(map);
+const advisoryLayer = L.layerGroup().addTo(map);
 
-async function loadAircraft() {
+// ===== ADVISORY ZONES (STADIUMS / DISNEY) =====
+const advisoryZones = [
+  { name:"Disneyland (Advisory)", lat:33.8121, lon:-117.9190, radius:5560 },
+  { name:"Dodger Stadium (Advisory)", lat:34.0739, lon:-118.2400, radius:5560 },
+  { name:"SoFi Stadium (Advisory)", lat:33.9535, lon:-118.3390, radius:5560 }
+];
+
+advisoryZones.forEach(z => {
+  L.circle([z.lat, z.lon], {
+    radius: z.radius,
+    color: "#ff9800",
+    dashArray: "6,6",
+    fillOpacity: 0.1
+  }).bindPopup(`<strong>${z.name}</strong><br>Informational only<br>NOT an official NOTAM`)
+    .addTo(advisoryLayer);
+});
+
+// ===== TFRs (LIVE FAA) =====
+fetch("https://tfr.faa.gov/tfrapi/geojson")
+.then(r=>r.json())
+.then(data=>{
+  L.geoJSON(data,{
+    style:{color:"#ff4444",weight:2,fillOpacity:0.15},
+    onEachFeature:(f,l)=>l.bindPopup("FAA Temporary Flight Restriction")
+  }).addTo(tfrLayer);
+});
+
+// ===== AIRCRAFT + CONFLICT DETECTION =====
+async function loadAircraft(){
   aircraftLayer.clearLayers();
+  document.getElementById("alertBox").innerHTML = "";
 
-  const url =
-    "https://opensky-network.org/api/states/all?" +
-    "lamin=32.0&lamax=35.7&lomin=-121.5&lomax=-114.0";
+  const url="https://opensky-network.org/api/states/all?lamin=32&lamax=35.7&lomin=-121.5&lomax=-114";
+  const res=await fetch(url);
+  const data=await res.json();
+  if(!data.states) return;
 
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!data.states) return;
+  data.states.forEach(s=>{
+    const lat=s[6], lon=s[5];
+    if(!lat||!lon) return;
 
-  data.states.forEach(s => {
-    const icao = s[0];
-    const callsign = s[1]?.trim() || "Unknown";
-    const lon = s[5];
-    const lat = s[6];
-    if (!lat || !lon) return;
+    let inRestricted=false;
 
-    if (!aircraftHistory[icao]) aircraftHistory[icao] = [];
-    aircraftHistory[icao].push([lat, lon]);
-    if (aircraftHistory[icao].length > 15) aircraftHistory[icao].shift();
+    advisoryZones.forEach(z=>{
+      const d=map.distance([lat,lon],[z.lat,z.lon]);
+      if(d<z.radius) inRestricted=true;
+    });
 
-    L.polyline(aircraftHistory[icao], {
-      color: "#00ffff",
-      weight: 1
+    const color=inRestricted?"#ff3333":"#00e5ff";
+
+    L.circleMarker([lat,lon],{
+      radius:4,
+      color:color
     }).addTo(aircraftLayer);
 
-    L.circleMarker([lat, lon], {
-      radius: 4,
-      color: "#00ffff"
-    }).addTo(aircraftLayer)
-      .bindPopup(`
-        <strong>Aircraft</strong><br>
-        ICAO: ${icao}<br>
-        Callsign: ${callsign}
-      `);
+    if(inRestricted){
+      document.getElementById("alertBox").innerHTML="⚠ Aircraft detected inside advisory / restricted area";
+    }
   });
 }
 
 loadAircraft();
-setInterval(loadAircraft, 10000);
+setInterval(loadAircraft,10000);
 
-// --- TFRs (FAA LIVE) ---
-const tfrLayer = L.layerGroup().addTo(map);
-
-fetch("https://tfr.faa.gov/tfrapi/geojson")
-  .then(res => res.json())
-  .then(data => {
-    L.geoJSON(data, {
-      style: {
-        color: "#ff4444",
-        weight: 2,
-        fillOpacity: 0.15
-      },
-      onEachFeature: (f, l) => {
-        l.bindPopup(`
-          <strong>TFR</strong><br>
-          ${f.properties?.description || "FAA Temporary Flight Restriction"}
-        `);
-      }
-    }).addTo(tfrLayer);
-  });
-
-// --- NOTAM PLACEHOLDER ---
-const notamLayer = L.layerGroup();
-L.marker([33.8121, -117.9190], { opacity: 0.7 })
-  .bindPopup("NOTAM data pending FAA API approval")
-  .addTo(notamLayer);
-
-// --- TOGGLE ---
-function toggleLayer(layer) {
-  map.hasLayer(layer) ? map.removeLayer(layer) : map.addLayer(layer);
+// ===== TOGGLE =====
+function toggleLayer(layer){
+  map.hasLayer(layer)?map.removeLayer(layer):map.addLayer(layer);
 }
 </script>
 </body>
