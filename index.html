@@ -5,169 +5,137 @@
 <title>AIRSMET – Airspace Situational Awareness</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-  body {
-    margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #0f1419;
-    color: #e5e7eb;
-  }
-
-  #topbar {
-    height: 48px;
-    background: #111827;
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-  }
-
-  #container {
-    display: flex;
-    height: calc(100vh - 48px);
-  }
-
-  #sidebar {
-    width: 260px;
-    background: #020617;
-    padding: 12px;
-    box-sizing: border-box;
-  }
-
-  #sidebar h3 {
-    margin: 8px 0 12px;
-    font-size: 14px;
-    color: #9ca3af;
-    text-transform: uppercase;
-  }
-
-  .toggle {
-    margin-bottom: 10px;
-  }
-
-  .toggle input {
-    margin-right: 8px;
-  }
-
-  #map {
-    flex: 1;
-  }
-
-  #footer {
-    position: absolute;
-    bottom: 8px;
-    left: 280px;
-    background: rgba(0,0,0,0.6);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: #9ca3af;
-  }
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0f1419;
+  color: #e5e7eb;
+}
+#topbar {
+  height: 48px;
+  background: #020617;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-weight: 600;
+}
+#container {
+  display: flex;
+  height: calc(100vh - 48px);
+}
+#sidebar {
+  width: 260px;
+  background: #020617;
+  padding: 12px;
+  box-sizing: border-box;
+}
+#sidebar h3 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+.toggle { margin-bottom: 8px; font-size: 14px; }
+#map { flex: 1; }
+.footer {
+  position: absolute;
+  bottom: 8px;
+  left: 280px;
+  background: rgba(0,0,0,0.6);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
 </style>
 </head>
 
 <body>
-
-<div id="topbar">
-  AIRSMET – Airspace Situational Awareness
-</div>
+<div id="topbar">AIRSMET – Airspace Situational Awareness</div>
 
 <div id="container">
-  <div id="sidebar">
-    <h3>Layers</h3>
+<div id="sidebar">
+  <h3>Map View</h3>
+  <div class="toggle"><input type="radio" name="basemap" checked onclick="setBase('standard')"> Standard</div>
+  <div class="toggle"><input type="radio" name="basemap" onclick="setBase('dark')"> Dark</div>
+  <div class="toggle"><input type="radio" name="basemap" onclick="setBase('sat')"> Satellite</div>
 
-    <div class="toggle">
-      <input type="checkbox" id="adsbToggle" checked />
-      <label for="adsbToggle">ADS-B Aircraft</label>
-    </div>
+  <h3>Layers</h3>
+  <div class="toggle"><input type="checkbox" checked onchange="toggleLayer(adsbLayer,this)"> ADS-B Aircraft</div>
+  <div class="toggle"><input type="checkbox" checked onchange="toggleLayer(tfrLayer,this)"> TFRs</div>
+  <div class="toggle"><input type="checkbox" checked onchange="toggleLayer(regionLayer,this)"> Region Boundary</div>
 
-    <div class="toggle">
-      <input type="checkbox" id="tfrToggle" checked />
-      <label for="tfrToggle">TFRs</label>
-    </div>
-
-    <h3>Status</h3>
-    <div style="font-size:13px;color:#9ca3af">
-      Region: Southern California<br>
-      Mode: Demo<br>
-      Last update: Live
-    </div>
+  <h3>Status</h3>
+  <div style="font-size:12px;color:#9ca3af">
+    Region: Southern California<br>
+    Data: Live (OpenSky + FAA)
   </div>
-
-  <div id="map"></div>
 </div>
 
-<div id="footer">
-  AIRSMET • Demo Dashboard • Not for navigation
+<div id="map"></div>
 </div>
+
+<div class="footer">Situational Awareness Only • Not for Navigation</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  // Map
-  const map = L.map("map", {
-    center: [34.3, -119.1], // Ventura County
-    zoom: 9,
-    zoomControl: true
-  });
+const map = L.map("map",{center:[34.3,-119.1],zoom:9});
 
-  L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { maxZoom: 19 }
-  ).addTo(map);
+const standard = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+const dark = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png");
+const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
 
-  // ADS-B layer (placeholder)
-  const adsbLayer = L.layerGroup().addTo(map);
+standard.addTo(map);
 
-  const demoAircraft = [
-    { lat: 34.42, lon: -119.7, callsign: "HELCO-1", alt: 1500 },
-    { lat: 34.15, lon: -118.9, callsign: "TANKER-912", alt: 4500 }
-  ];
+function setBase(type){
+  map.eachLayer(l=>map.removeLayer(l));
+  ({standard,dark,sat}[type]).addTo(map);
+  adsbLayer.addTo(map);
+  tfrLayer.addTo(map);
+  regionLayer.addTo(map);
+}
 
-  demoAircraft.forEach(ac => {
-    L.circleMarker([ac.lat, ac.lon], {
-      radius: 6,
-      color: "#2dd4ff",
-      weight: 2,
-      fillOpacity: 0.9
-    })
-    .bindPopup(
-      `<b>${ac.callsign}</b><br>Altitude: ${ac.alt} ft`
-    )
+function toggleLayer(layer,cb){ cb.checked ? layer.addTo(map) : map.removeLayer(layer); }
+
+const adsbLayer = L.layerGroup().addTo(map);
+const tfrLayer = L.layerGroup().addTo(map);
+const regionLayer = L.layerGroup().addTo(map);
+
+// Region box (Ventura focus)
+L.rectangle([[34.55,-119.7],[34.1,-118.8]],{
+  color:"#ef4444",weight:2,fillOpacity:0.05
+}).addTo(regionLayer);
+
+// OpenSky ADS-B
+async function loadADSB(){
+  adsbLayer.clearLayers();
+  const res = await fetch("https://opensky-network.org/api/states/all?lamin=32.5&lomin=-121&lamax=35.5&lomax=-117");
+  const data = await res.json();
+  data.states.forEach(s=>{
+    if(!s[6]||!s[5]) return;
+    L.circleMarker([s[6],s[5]],{
+      radius:5,color:"#2dd4ff",fillOpacity:0.9
+    }).bindPopup(`ICAO: ${s[0]}<br>Alt: ${Math.round(s[7]||0)} ft`)
     .addTo(adsbLayer);
   });
+}
+setInterval(loadADSB,5000);
+loadADSB();
 
-  // TFR layer (placeholder polygon)
-  const tfrLayer = L.layerGroup().addTo(map);
-
-  const tfrPolygon = L.polygon([
-    [34.45, -119.4],
-    [34.45, -119.0],
-    [34.20, -119.0],
-    [34.20, -119.4]
-  ], {
-    color: "#ef4444",
-    weight: 2,
-    fillOpacity: 0.15
-  }).bindPopup("Temporary Flight Restriction");
-
-  tfrLayer.addLayer(tfrPolygon);
-
-  // Toggle logic
-  document.getElementById("adsbToggle").addEventListener("change", e => {
-    e.target.checked ? adsbLayer.addTo(map) : map.removeLayer(adsbLayer);
+// FAA TFRs
+fetch("https://tfr.faa.gov/tfr_map_ims_data.json")
+.then(r=>r.json())
+.then(j=>{
+  j.features.forEach(f=>{
+    L.geoJSON(f,{
+      style:{color:"#f97316",weight:2,fillOpacity:0.15}
+    }).bindPopup("Temporary Flight Restriction")
+    .addTo(tfrLayer);
   });
-
-  document.getElementById("tfrToggle").addEventListener("change", e => {
-    e.target.checked ? tfrLayer.addTo(map) : map.removeLayer(tfrLayer);
-  });
+});
 </script>
-
 </body>
 </html>
